@@ -5,7 +5,10 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   OAuthProvider,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  deleteUser,
+  reauthenticateWithPopup,
+  sendEmailVerification
 } from 'firebase/auth'
 import { auth, googleProvider } from './config'
 
@@ -24,9 +27,10 @@ export const signInWithGoogle = async () => {
 export const signUpWithEmail = async (email, password) => {
   try {
     const result = await createUserWithEmailAndPassword(auth, email, password)
+    // Envoyer email de vérification
+    await sendEmailVerification(result.user)
     return result.user
   } catch (error) {
-    console.error('Error signing up with email:', error)
     throw error
   }
 }
@@ -71,4 +75,37 @@ export const onAuthChange = (callback) => {
 // Get current user
 export const getCurrentUser = () => {
   return auth.currentUser
+}
+
+// Resend verification email
+export const resendVerificationEmail = async () => {
+  try {
+    const user = auth.currentUser
+    if (user && !user.emailVerified) {
+      await sendEmailVerification(user)
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
+// Delete user account
+export const deleteUserAccount = async () => {
+  try {
+    const user = auth.currentUser
+    if (user) {
+      // Réauthentifier l'utilisateur avant suppression
+      // Si connecté via Google, réauthentifier avec Google
+      const providerData = user.providerData[0]
+      if (providerData && providerData.providerId === 'google.com') {
+        await reauthenticateWithPopup(user, googleProvider)
+      }
+      
+      // Supprimer le compte
+      await deleteUser(user)
+    }
+  } catch (error) {
+    console.error('Error deleting user account:', error)
+    throw error
+  }
 }

@@ -24,7 +24,6 @@ const COLLECTIONS = {
 
 export const getSessions = async (userId) => {
   try {
-    console.log('📊 getSessions called for userId:', userId)
     const q = query(
       collection(db, COLLECTIONS.SESSIONS),
       where('userId', '==', userId),
@@ -32,10 +31,8 @@ export const getSessions = async (userId) => {
     )
     const snapshot = await getDocs(q)
     const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-    console.log('📊 Found sessions:', sessions.length, sessions)
     return sessions
   } catch (error) {
-    console.error('❌ Error getting sessions:', error.message, error.code)
     return []
   }
 }
@@ -50,7 +47,6 @@ export const addSession = async (userId, sessionData) => {
     })
     return sessionRef.id
   } catch (error) {
-    console.error('Error adding session:', error)
     throw error
   }
 }
@@ -60,7 +56,6 @@ export const updateSession = async (sessionId, data) => {
     const sessionRef = doc(db, COLLECTIONS.SESSIONS, sessionId)
     await updateDoc(sessionRef, data)
   } catch (error) {
-    console.error('Error updating session:', error)
     throw error
   }
 }
@@ -69,7 +64,6 @@ export const deleteSession = async (sessionId) => {
   try {
     await deleteDoc(doc(db, COLLECTIONS.SESSIONS, sessionId))
   } catch (error) {
-    console.error('Error deleting session:', error)
     throw error
   }
 }
@@ -78,7 +72,6 @@ export const deleteSession = async (sessionId) => {
 
 export const getPomodoros = async (userId) => {
   try {
-    console.log('🍅 getPomodoros called for userId:', userId)
     const q = query(
       collection(db, COLLECTIONS.POMODOROS),
       where('userId', '==', userId),
@@ -86,10 +79,8 @@ export const getPomodoros = async (userId) => {
     )
     const snapshot = await getDocs(q)
     const pomodoros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-    console.log('🍅 Found pomodoros:', pomodoros.length, pomodoros)
     return pomodoros
   } catch (error) {
-    console.error('❌ Error getting pomodoros:', error.message, error.code)
     return []
   }
 }
@@ -104,7 +95,15 @@ export const addPomodoro = async (userId, pomodoroData) => {
     })
     return pomodoroRef.id
   } catch (error) {
-    console.error('Error adding pomodoro:', error)
+    throw error
+  }
+}
+
+export const updatePomodoro = async (pomodoroId, data) => {
+  try {
+    const pomodoroRef = doc(db, COLLECTIONS.POMODOROS, pomodoroId)
+    await updateDoc(pomodoroRef, data)
+  } catch (error) {
     throw error
   }
 }
@@ -113,7 +112,6 @@ export const deletePomodoro = async (pomodoroId) => {
   try {
     await deleteDoc(doc(db, COLLECTIONS.POMODOROS, pomodoroId))
   } catch (error) {
-    console.error('Error deleting pomodoro:', error)
     throw error
   }
 }
@@ -129,7 +127,6 @@ export const getSettings = async (userId) => {
     }
     return null
   } catch (error) {
-    console.error('Error getting settings:', error)
     return null
   }
 }
@@ -139,7 +136,6 @@ export const saveSettings = async (userId, settings) => {
     const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId)
     await setDoc(settingsRef, settings, { merge: true })
   } catch (error) {
-    console.error('Error saving settings:', error)
     throw error
   }
 }
@@ -166,6 +162,37 @@ export const onPomodorosChange = (userId, callback) => {
     const pomodoros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
     callback(pomodoros)
   })
+}
+
+// ===== DELETE ALL DATA =====
+
+export const deleteAllUserData = async (userId) => {
+  try {
+    // Supprimer toutes les sessions
+    const sessionsQuery = query(
+      collection(db, COLLECTIONS.SESSIONS),
+      where('userId', '==', userId)
+    )
+    const sessionsSnapshot = await getDocs(sessionsQuery)
+    const sessionDeletes = sessionsSnapshot.docs.map(doc => deleteDoc(doc.ref))
+    
+    // Supprimer tous les pomodoros
+    const pomodorosQuery = query(
+      collection(db, COLLECTIONS.POMODOROS),
+      where('userId', '==', userId)
+    )
+    const pomodorosSnapshot = await getDocs(pomodorosQuery)
+    const pomodoroDeletes = pomodorosSnapshot.docs.map(doc => deleteDoc(doc.ref))
+    
+    // Supprimer les paramètres
+    const settingsRef = doc(db, COLLECTIONS.SETTINGS, userId)
+    
+    await Promise.all([...sessionDeletes, ...pomodoroDeletes, deleteDoc(settingsRef)])
+    
+    return true
+  } catch (error) {
+    throw error
+  }
 }
 
 // ===== MIGRATION from localStorage =====
@@ -212,7 +239,6 @@ export const migrateLocalStorageData = async (userId) => {
 
     return true
   } catch (error) {
-    console.error('Error migrating data:', error)
     return false
   }
 }

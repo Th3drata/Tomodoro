@@ -48,9 +48,17 @@ body {
   cursor: pointer;
   z-index: 1002;
   background: var(--bg-secondary);
+  border: none;
   border-radius: 8px;
   padding: 8px;
   transition: all 0.3s ease;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hamburger-menu.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .hamburger-menu:hover {
@@ -339,6 +347,19 @@ body {
   transform: translateY(-4px);
 }
 
+@keyframes borderGlow {
+  0% {
+    background-position: 0% 0%, 0% 0%;
+  }
+  100% {
+    background-position: 0% 0%, 300% 0%;
+  }
+}
+
+.active-session-glow {
+  animation: borderGlow 3s linear infinite;
+}
+
 .session-card h3 {
   margin-bottom: 0.5rem;
   font-size: 1.3rem;
@@ -355,10 +376,23 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+  gap: 1rem;
 }
 
 .calendar-controls h3 {
   font-size: 1.5rem;
+  flex: 1;
+  text-align: center;
+}
+
+.calendar-controls .btn {
+  min-width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  padding: 0;
 }
 
 .calendar-grid {
@@ -561,6 +595,7 @@ body {
   display: flex;
   gap: 0.5rem;
   margin-top: 1rem;
+  justify-content: center;
 }
 
 .edit-mode {
@@ -727,10 +762,23 @@ body {
   font-size: 2.5rem;
   margin-bottom: 0.75rem;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent) 0%, #ff8787 100%);
+  background: linear-gradient(90deg, #ff0844 0%, #ff006e 20%, #ff1744 40%, #ff0033 60%, #ff0055 80%, #ff0844 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  background-size: 200% auto;
+  animation: gradient-shift 2s ease infinite;
+  filter: drop-shadow(0 0 8px rgba(255, 8, 68, 0.5));
+  text-shadow: 0 0 20px rgba(255, 8, 68, 0.3);
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
 }
 
 .login-header p {
@@ -997,6 +1045,36 @@ body {
   font-size: 0.95rem;
   margin-bottom: 0.5rem;
   text-align: center;
+}
+
+/* GitHub Link */
+.github-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0.5rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+
+.github-link:hover {
+  background: var(--bg-card);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.github-link svg {
+  flex-shrink: 0;
 }
 
 /* User Info in Sidebar */
@@ -1668,6 +1746,32 @@ body {
     padding: 1.5rem 0.75rem;
     font-size: 0.9rem;
   }
+
+  .btn-save-settings {
+    min-width: 150px !important;
+    font-size: 0.9rem;
+    padding: 0.7rem 1.2rem;
+  }
+
+  .sessions-section h2 {
+    font-size: 1.5rem;
+  }
+
+  .session-card {
+    padding: 1rem;
+  }
+
+  .session-actions {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    justify-content: center;
+  }
+
+  .session-actions .btn {
+    flex: 1 1 auto;
+    min-width: 100px;
+    max-width: 150px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1743,6 +1847,16 @@ body {
 
   .pomodoro-count {
     font-size: 0.7rem;
+  }
+
+  .calendar-controls h3 {
+    font-size: 1.2rem;
+  }
+
+  .calendar-controls .btn {
+    min-width: 45px;
+    height: 45px;
+    font-size: 1.3rem;
   }
 }
 

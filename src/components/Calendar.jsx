@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { getCurrentUser } from '../firebase/auth'
+import { getSessions, getPomodoros, onSessionsChange, onPomodorosChange } from '../firebase/database'
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -8,15 +10,44 @@ export default function Calendar() {
   const [dayDetails, setDayDetails] = useState([])
 
   useEffect(() => {
+    const user = getCurrentUser()
+    if (!user) return
+    
+    let unsubSessions = () => {}
+    let unsubPomodoros = () => {}
+    
+    const loadData = async () => {
+      try {
+        // Charger les données initiales
+        const [sessionsData, pomodorosData] = await Promise.all([
+          getSessions(user.uid),
+          getPomodoros(user.uid)
+        ])
+        
+        setSessions(sessionsData)
+        setPomodoros(pomodorosData)
+        
+        // Écouter les changements en temps réel
+        unsubSessions = onSessionsChange(user.uid, (newSessions) => {
+          setSessions(newSessions)
+        })
+        
+        unsubPomodoros = onPomodorosChange(user.uid, (newPomodoros) => {
+          setPomodoros(newPomodoros)
+        })
+      } catch (error) {
+        
+      }
+    }
+    
     loadData()
+    
+    // Cleanup
+    return () => {
+      unsubSessions()
+      unsubPomodoros()
+    }
   }, [])
-
-  const loadData = () => {
-    const pomodorosData = JSON.parse(localStorage.getItem('pomodoro_pomodoros') || '[]')
-    const sessionsData = JSON.parse(localStorage.getItem('pomodoro_sessions') || '[]')
-    setPomodoros(pomodorosData)
-    setSessions(sessionsData)
-  }
 
   const prevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))

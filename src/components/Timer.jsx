@@ -90,7 +90,7 @@ export default function Timer({ onPomodoroComplete, settings, currentSession, se
           onPomodoroComplete()
         }
       } catch (error) {
-        console.error('Error saving pomodoro:', error)
+        
       }
       
       // Move to break
@@ -143,11 +143,25 @@ export default function Timer({ onPomodoroComplete, settings, currentSession, se
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
+      setIsFullscreen(
+        !!document.fullscreenElement || 
+        !!document.webkitFullscreenElement ||
+        !!document.mozFullScreenElement ||
+        !!document.msFullscreenElement
+      )
     }
     
     document.addEventListener('fullscreenchange', handleFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange)
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange)
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange)
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -176,13 +190,52 @@ export default function Timer({ onPomodoroComplete, settings, currentSession, se
     return () => document.removeEventListener('keydown', handleKeyPress)
   }, [isRunning, currentSession])
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(err => {
-        console.error('Erreur fullscreen:', err)
-      })
-    } else {
-      document.exitFullscreen()
+  const toggleFullscreen = async () => {
+    const elem = document.documentElement
+    
+    // Vérifier si déjà en fullscreen
+    const isCurrentlyFullscreen = 
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    
+    try {
+      if (!isCurrentlyFullscreen) {
+        // Entrer en fullscreen avec support cross-browser
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen()
+        } else if (elem.webkitRequestFullscreen) {
+          // Safari/iOS
+          await elem.webkitRequestFullscreen()
+        } else if (elem.mozRequestFullScreen) {
+          // Firefox
+          await elem.mozRequestFullScreen()
+        } else if (elem.msRequestFullscreen) {
+          // IE/Edge
+          await elem.msRequestFullscreen()
+        } else {
+          // Fallback pour iOS : utiliser un mode fullscreen simulé
+          setIsFullscreen(true)
+        }
+      } else {
+        // Sortir du fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen()
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen()
+        } else if (document.mozCancelFullScreen) {
+          await document.mozCancelFullScreen()
+        } else if (document.msExitFullscreen) {
+          await document.msExitFullscreen()
+        } else {
+          // Fallback
+          setIsFullscreen(false)
+        }
+      }
+    } catch (err) {
+      // En cas d'échec, utiliser le mode fullscreen simulé
+      setIsFullscreen(!isCurrentlyFullscreen)
     }
   }
 
@@ -221,7 +274,7 @@ export default function Timer({ onPomodoroComplete, settings, currentSession, se
       setSessionTitle('')
       setCategory('')
     } catch (error) {
-      console.error('Error creating session:', error)
+      
       alert('Erreur lors de la création de la session')
     }
   }
@@ -272,6 +325,7 @@ export default function Timer({ onPomodoroComplete, settings, currentSession, se
           onClick={toggleFullscreen} 
           className="btn-fullscreen"
           title="Mode plein écran"
+          aria-label="Activer le mode plein écran"
         >
           ⛶
         </button>
@@ -294,11 +348,11 @@ export default function Timer({ onPomodoroComplete, settings, currentSession, se
 
         <div className="timer-controls">
           {!isRunning ? (
-            <button onClick={startTimer} className="btn btn-primary">Démarrer</button>
+            <button onClick={startTimer} className="btn btn-primary" aria-label="Démarrer le minuteur">Démarrer</button>
           ) : (
-            <button onClick={pauseTimer} className="btn btn-secondary">Pause</button>
+            <button onClick={pauseTimer} className="btn btn-secondary" aria-label="Mettre en pause le minuteur">Pause</button>
           )}
-          <button onClick={resetTimer} className="btn btn-danger">Réinitialiser</button>
+          <button onClick={resetTimer} className="btn btn-danger" aria-label="Réinitialiser le minuteur">Réinitialiser</button>
         </div>
 
         {!currentSession && (
@@ -372,7 +426,7 @@ export default function Timer({ onPomodoroComplete, settings, currentSession, se
                 </button>
               </div>
             </div>
-            <button onClick={createSession} className="btn btn-success">Créer Session</button>
+            <button onClick={createSession} className="btn btn-success" aria-label="Créer une nouvelle session de travail">Créer Session</button>
           </div>
         )}
       </div>

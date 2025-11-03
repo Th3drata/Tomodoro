@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import { Analytics } from "@vercel/analytics/react";
 import { HexColorPicker } from "react-colorful";
-import { onAuthChange, signOut } from "./firebase/auth";
+import { onAuthChange, signOut, deleteUserAccount, resendVerificationEmail } from "./firebase/auth";
 import {
   getSettings,
   saveSettings,
@@ -25,6 +25,7 @@ import {
   migrateLocalStorageData,
   getSessions,
   getPomodoros,
+  deleteAllUserData,
 } from "./firebase/database";
 import Timer from "./components/Timer";
 import Sessions from "./components/Sessions";
@@ -110,15 +111,35 @@ function prepareChartData(pomodoros) {
   return { last7Days, categoryChart };
 }
 
-const COLORS = [
-  "#667eea",
-  "#764ba2",
-  "#f093fb",
-  "#4facfe",
-  "#43e97b",
-  "#fa709a",
-  "#fee140",
-];
+// Générer des variations de couleur pour les graphiques camembert
+function generateColorVariations(baseColor, count) {
+  const colors = [];
+  const r = parseInt(baseColor.slice(1, 3), 16);
+  const g = parseInt(baseColor.slice(3, 5), 16);
+  const b = parseInt(baseColor.slice(5, 7), 16);
+
+  for (let i = 0; i < count; i++) {
+    const factor = 0.6 + (i / count) * 0.7; // Variation de 60% à 130%
+    const newR = Math.min(255, Math.round(r * factor));
+    const newG = Math.min(255, Math.round(g * factor));
+    const newB = Math.min(255, Math.round(b * factor));
+    colors.push(`rgb(${newR}, ${newG}, ${newB})`);
+  }
+  
+  return colors;
+}
+
+// Générer une couleur plus claire pour la deuxième ligne du graphique
+function generateLighterColor(baseColor) {
+  const r = parseInt(baseColor.slice(1, 3), 16);
+  const g = parseInt(baseColor.slice(3, 5), 16);
+  const b = parseInt(baseColor.slice(5, 7), 16);
+  
+  // Augmenter la luminosité de 40%
+  const lighten = (val) => Math.min(255, Math.round(val + (255 - val) * 0.4));
+  
+  return `rgb(${lighten(r)}, ${lighten(g)}, ${lighten(b)})`;
+}
 
 const PRESET_COLORS = [
   { name: "Rouge", color: "#ff6b6b" },
@@ -151,6 +172,125 @@ function generateThemeFromColor(color) {
   };
 }
 
+// Email Verification Screen Component
+function EmailVerificationScreen({ user }) {
+  const [countdown, setCountdown] = useState(60)
+  const [canResend, setCanResend] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+      return () => clearTimeout(timer)
+    } else {
+      setCanResend(true)
+    }
+  }, [countdown])
+
+  // Vérifier périodiquement si l'email a été vérifié
+  useEffect(() => {
+    const checkVerification = setInterval(async () => {
+      await user.reload()
+      if (user.emailVerified) {
+        window.location.reload()
+      }
+    }, 3000)
+
+    return () => clearInterval(checkVerification)
+  }, [user])
+
+  const handleResendEmail = async () => {
+    try {
+      setResending(true)
+      setMessage('')
+      await resendVerificationEmail()
+      setMessage('✅ Email renvoyé avec succès !')
+      setCountdown(60)
+      setCanResend(false)
+      setTimeout(() => setMessage(''), 3000)
+    } catch (error) {
+      setMessage('❌ Erreur lors de l\'envoi de l\'email')
+    } finally {
+      setResending(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    window.location.reload()
+  }
+
+  return (
+    <div className="login-container">
+      <div className="login-card" style={{ maxWidth: '500px' }}>
+        <div className="login-header">
+          <picture>
+            <source srcSet="/tomato.webp" type="image/webp" />
+            <img 
+              src="/tomato.png" 
+              alt="Logo Tomodoro" 
+              className="login-logo"
+              loading="eager"
+              width="140"
+              height="140"
+            />
+          </picture>
+          <h1>Vérifiez votre email</h1>
+        </div>
+
+        <div style={{ padding: '2rem 1rem', textAlign: 'center' }}>
+          <div className="login-error" style={{ marginBottom: '1.5rem' }}>
+            ⚠️ Veuillez confirmer votre email. Un mail vous a été envoyé.
+          </div>
+
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+            Nous avons envoyé un email de vérification à :<br />
+            <strong style={{ color: 'var(--text-primary)' }}>{user.email}</strong>
+          </p>
+
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+            Cliquez sur le lien dans l'email pour activer votre compte.<br />
+            <em>Cette page se mettra à jour automatiquement.</em>
+          </p>
+
+          <button 
+            className="btn btn-primary"
+            onClick={handleResendEmail}
+            disabled={!canResend || resending}
+            style={{ 
+              marginBottom: '1rem',
+              opacity: canResend ? 1 : 0.5,
+              cursor: canResend ? 'pointer' : 'not-allowed'
+            }}
+          >
+            {resending ? 'Envoi...' : canResend ? 'Renvoyer l\'email' : `Renvoyer dans ${countdown}s`}
+          </button>
+
+          {message && (
+            <div style={{ 
+              padding: '0.75rem', 
+              borderRadius: '8px', 
+              marginBottom: '1rem',
+              background: message.includes('✅') ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+              color: message.includes('✅') ? '#4caf50' : '#f44336'
+            }}>
+              {message}
+            </div>
+          )}
+
+          <button 
+            className="btn btn-secondary"
+            onClick={handleSignOut}
+          >
+            Se déconnecter
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   // Auth state
   const [user, setUser] = useState(null);
@@ -173,25 +313,88 @@ function App() {
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentSession, setCurrentSession] = useState(null);
+  const [pendingChanges, setPendingChanges] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
 
   const currentTheme = generateThemeFromColor(customColor);
+  const chartColors = generateColorVariations(customColor, 7);
+  const lighterColor = generateLighterColor(customColor);
 
   const refreshData = () => {
     // Data is now loaded from Firebase automatically via listeners
     setRefreshKey((prev) => prev + 1);
   };
 
-  const changeColor = async (newColor) => {
+  const changeColor = (newColor) => {
     setCustomColor(newColor);
+    setPendingChanges(true);
+  };
+
+  const updateTimerSettings = (newSettings) => {
+    setTimerSettings(newSettings);
+    setPendingChanges(true);
+  };
+
+  const saveAllSettings = async () => {
     if (user) {
-      await saveSettings(user.uid, { customColor: newColor, timerSettings });
+      try {
+        // Valider et corriger les valeurs vides ou invalides
+        const validatedSettings = {
+          focusTime: timerSettings.focusTime || 1,
+          breakTime: timerSettings.breakTime || 1,
+          longBreakTime: timerSettings.longBreakTime || 1
+        };
+        
+        setTimerSettings(validatedSettings);
+        await saveSettings(user.uid, { customColor, timerSettings: validatedSettings });
+        setPendingChanges(false);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } catch (error) {
+        console.error('Erreur lors de la sauvegarde:', error);
+        alert('Erreur lors de la sauvegarde des paramètres');
+      }
     }
   };
 
-  const updateTimerSettings = async (newSettings) => {
-    setTimerSettings(newSettings);
-    if (user) {
-      await saveSettings(user.uid, { customColor, timerSettings: newSettings });
+  const handleResetData = async () => {
+    if (confirmText !== 'confirmer') {
+      alert('Veuillez taper "confirmer" pour valider');
+      return;
+    }
+
+    try {
+      await deleteAllUserData(user.uid);
+      setShowResetModal(false);
+      setConfirmText('');
+      alert('✅ Toutes les données ont été supprimées');
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      alert('❌ Erreur lors de la suppression des données');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (confirmText !== 'confirmer') {
+      alert('Veuillez taper "confirmer" pour valider');
+      return;
+    }
+
+    try {
+      await deleteAllUserData(user.uid);
+      await deleteUserAccount();
+      setShowDeleteModal(false);
+      setConfirmText('');
+    } catch (error) {
+      console.error('Erreur lors de la suppression du compte:', error);
+      if (error.code === 'auth/requires-recent-login') {
+        alert('❌ Vous devez vous reconnecter avant de supprimer votre compte. Veuillez vous déconnecter puis vous reconnecter.');
+      } else {
+        alert('❌ Erreur lors de la suppression du compte');
+      }
     }
   };
 
@@ -203,6 +406,93 @@ function App() {
     root.style.setProperty("--gradient1", currentTheme.gradient1);
     root.style.setProperty("--gradient2", currentTheme.gradient2);
   }, [customColor, currentTheme]);
+
+  // Ouvrir/fermer le sidebar au hover
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      const sidebar = document.querySelector(".sidebar");
+      
+      // Ouvrir si la souris est dans les 50 premiers pixels à gauche
+      if (e.clientX <= 50 && !sidebarOpen) {
+        setSidebarOpen(true);
+      }
+      
+      // Fermer si le menu est ouvert et la souris quitte la zone (sidebar + marge)
+      if (sidebar && sidebarOpen) {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        const isOutside = e.clientX > sidebarRect.right + 50; // 50px de marge
+        
+        if (isOutside) {
+          setSidebarOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => document.removeEventListener("mousemove", handleMouseMove);
+  }, [sidebarOpen]);
+
+  // Gestion du swipe sur mobile
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchEndX = 0;
+    let touchStartY = 0;
+    let touchEndY = 0;
+
+    const handleTouchStart = (e) => {
+      // Ignorer si on touche dans une zone de contenu (pas le bord)
+      const target = e.target;
+      if (target.closest('.sessions-grid') || target.closest('.calendar-grid') || target.closest('.session-card')) {
+        return;
+      }
+      
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    };
+
+    const handleTouchEnd = (e) => {
+      // Ignorer si pas de touchStart (déjà bloqué)
+      if (touchStartX === 0 && touchStartY === 0) return;
+      
+      touchEndX = e.changedTouches[0].screenX;
+      touchEndY = e.changedTouches[0].screenY;
+      handleSwipe();
+      
+      // Réinitialiser
+      touchStartX = 0;
+      touchStartY = 0;
+    };
+
+    const handleSwipe = () => {
+      const swipeDistanceX = touchEndX - touchStartX;
+      const swipeDistanceY = Math.abs(touchEndY - touchStartY);
+      const sidebar = document.querySelector(".sidebar");
+      
+      // Vérifier que c'est un swipe horizontal (pas vertical)
+      if (swipeDistanceY > 50) return;
+      
+      // Swipe droite depuis le bord gauche -> ouvrir
+      if (touchStartX < 50 && swipeDistanceX > 100 && !sidebarOpen) {
+        setSidebarOpen(true);
+      }
+      
+      // Swipe gauche depuis la sidebar -> fermer
+      if (sidebar && sidebarOpen && swipeDistanceX < -100) {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        if (touchStartX < sidebarRect.right) {
+          setSidebarOpen(false);
+        }
+      }
+    };
+
+    document.addEventListener("touchstart", handleTouchStart);
+    document.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [sidebarOpen]);
 
   // Fermer le sidebar quand on clique en dehors
   useEffect(() => {
@@ -326,20 +616,27 @@ function App() {
     return <Login />;
   }
 
+  // Show email verification screen if email not verified
+  if (user && !user.emailVerified) {
+    return <EmailVerificationScreen user={user} />;
+  }
+
   const hasData = data.pomodoros.length > 0;
 
   return (
     <div className="app-container">
-      <div
-        className="hamburger-menu"
+      <button
+        className={`hamburger-menu ${sidebarOpen ? 'hidden' : ''}`}
         onClick={() => setSidebarOpen(!sidebarOpen)}
+        aria-label="Ouvrir le menu de navigation"
+        aria-expanded={sidebarOpen}
       >
         <div className="hamburger-line"></div>
         <div className="hamburger-line"></div>
         <div className="hamburger-line"></div>
-      </div>
+      </button>
 
-      <nav className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+      <nav className={`sidebar ${sidebarOpen ? "open" : ""}`} role="navigation" aria-label="Menu principal">
         <h1>🍅 Pomodoro</h1>
         <ul>
           <li>
@@ -418,12 +715,14 @@ function App() {
             </a>
           </li>
         </ul>
-      <a 
+
+        <a 
           href="https://github.com/Th3drata/Tomodoro" 
           target="_blank" 
           rel="noopener noreferrer"
           className="github-link"
           title="Voir le code sur GitHub"
+          aria-label="Voir le code source du projet sur GitHub"
         >
           <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
@@ -439,14 +738,14 @@ function App() {
               className="user-avatar"
             />
             <span className="user-name">{user.displayName}</span>
-            <button onClick={signOut} className="btn btn-secondary btn-small">
+            <button onClick={signOut} className="btn btn-secondary btn-small" aria-label="Se déconnecter du compte">
               Déconnexion
             </button>
           </div>
         )}
       </nav>
 
-      <main className="content">
+      <main className="content" role="main">
         {currentView === "timer" && (
           <Timer
             onPomodoroComplete={refreshData}
@@ -529,16 +828,16 @@ function App() {
                   <input
                     id="focusTime"
                     type="number"
-                    min="1"
                     max="120"
                     value={timerSettings.focusTime}
                     onChange={(e) =>
                       updateTimerSettings({
                         ...timerSettings,
-                        focusTime: parseInt(e.target.value) || 1,
+                        focusTime: e.target.value === '' ? '' : parseInt(e.target.value),
                       })
                     }
                     className="input-field"
+                    placeholder="1"
                   />
                 </div>
                 <div className="setting-item">
@@ -546,16 +845,16 @@ function App() {
                   <input
                     id="breakTime"
                     type="number"
-                    min="1"
                     max="60"
                     value={timerSettings.breakTime}
                     onChange={(e) =>
                       updateTimerSettings({
                         ...timerSettings,
-                        breakTime: parseInt(e.target.value) || 1,
+                        breakTime: e.target.value === '' ? '' : parseInt(e.target.value),
                       })
                     }
                     className="input-field"
+                    placeholder="1"
                   />
                 </div>
                 <div className="setting-item">
@@ -563,17 +862,175 @@ function App() {
                   <input
                     id="longBreakTime"
                     type="number"
-                    min="1"
                     max="120"
                     value={timerSettings.longBreakTime}
                     onChange={(e) =>
                       updateTimerSettings({
                         ...timerSettings,
-                        longBreakTime: parseInt(e.target.value) || 1,
+                        longBreakTime: e.target.value === '' ? '' : parseInt(e.target.value),
                       })
                     }
                     className="input-field"
+                    placeholder="1"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Bouton Enregistrer */}
+            <div style={{ 
+              position: 'sticky', 
+              bottom: '2rem', 
+              marginTop: '2rem',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '1rem',
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}>
+              <button 
+                onClick={saveAllSettings}
+                disabled={!pendingChanges}
+                className="btn btn-primary btn-save-settings"
+                style={{ 
+                  minWidth: '200px',
+                  opacity: pendingChanges ? 1 : 0.5,
+                  cursor: pendingChanges ? 'pointer' : 'not-allowed'
+                }}
+              >
+                {pendingChanges ? '💾 Enregistrer' : '✓ Sauvegardé'}
+              </button>
+              {saveSuccess && (
+                <span style={{ 
+                  color: 'var(--success)', 
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  animation: 'fadeIn 0.3s ease'
+                }}>
+                  ✓ Enregistré !
+                </span>
+              )}
+            </div>
+
+            {/* Zone de danger */}
+            <div className="settings-card" style={{ marginTop: '2rem', borderColor: '#ff6b6b' }}>
+              <h3 style={{ color: '#ff6b6b' }}>Zone de danger</h3>
+              <p className="settings-description">
+                Actions irréversibles. Soyez prudent.
+              </p>
+              
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
+                <button 
+                  className="btn btn-danger"
+                  onClick={() => setShowResetModal(true)}
+                  style={{ flex: '1 1 200px' }}
+                >
+                  🗑️ Réinitialiser les données
+                </button>
+                <button 
+                  className="btn btn-danger"
+                  onClick={() => setShowDeleteModal(true)}
+                  style={{ flex: '1 1 200px' }}
+                >
+                  ⚠️ Supprimer mon compte
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modale Reset */}
+        {showResetModal && (
+          <div className="modal-overlay" onClick={() => { setShowResetModal(false); setConfirmText(''); }}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+              <div className="modal-header">
+                <h3>🗑️ Réinitialiser les données</h3>
+                <button className="modal-close" onClick={() => { setShowResetModal(false); setConfirmText(''); }}>×</button>
+              </div>
+              <div className="modal-body">
+                <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+                  Cette action supprimera <strong>toutes vos sessions, pomodoros et paramètres</strong>.
+                </p>
+                <p style={{ marginBottom: '1.5rem', color: '#ff6b6b', fontWeight: 600 }}>
+                  ⚠️ Cette action est irréversible !
+                </p>
+                
+                <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>
+                  Tapez <strong>confirmer</strong> pour valider :
+                </label>
+                <input 
+                  type="text" 
+                  className="input-field"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder="confirmer"
+                  style={{ marginBottom: '1.5rem' }}
+                />
+
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => { setShowResetModal(false); setConfirmText(''); }}
+                  >
+                    Annuler
+                  </button>
+                  <button 
+                    className="btn btn-danger" 
+                    onClick={handleResetData}
+                    disabled={confirmText !== 'confirmer'}
+                    style={{ opacity: confirmText === 'confirmer' ? 1 : 0.5 }}
+                  >
+                    Réinitialiser
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modale Suppression compte */}
+        {showDeleteModal && (
+          <div className="modal-overlay" onClick={() => { setShowDeleteModal(false); setConfirmText(''); }}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+              <div className="modal-header">
+                <h3>⚠️ Supprimer mon compte</h3>
+                <button className="modal-close" onClick={() => { setShowDeleteModal(false); setConfirmText(''); }}>×</button>
+              </div>
+              <div className="modal-body">
+                <p style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>
+                  Cette action supprimera <strong>définitivement votre compte</strong> ainsi que toutes vos données.
+                </p>
+                <p style={{ marginBottom: '1.5rem', color: '#ff6b6b', fontWeight: 600 }}>
+                  ⚠️ Vous ne pourrez plus vous reconnecter avec ce compte !
+                </p>
+                
+                <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'block' }}>
+                  Tapez <strong>confirmer</strong> pour valider :
+                </label>
+                <input 
+                  type="text" 
+                  className="input-field"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder="confirmer"
+                  style={{ marginBottom: '1.5rem' }}
+                />
+
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => { setShowDeleteModal(false); setConfirmText(''); }}
+                  >
+                    Annuler
+                  </button>
+                  <button 
+                    className="btn btn-danger" 
+                    onClick={handleDeleteAccount}
+                    disabled={confirmText !== 'confirmer'}
+                    style={{ opacity: confirmText === 'confirmer' ? 1 : 0.5 }}
+                  >
+                    Supprimer définitivement
+                  </button>
                 </div>
               </div>
             </div>
@@ -667,7 +1124,7 @@ function App() {
                         <Tooltip
                           contentStyle={{
                             background: "#1a1a2e",
-                            border: "1px solid #667eea",
+                            border: `1px solid ${customColor}`,
                             borderRadius: "8px",
                           }}
                           labelStyle={{ color: "#fff" }}
@@ -677,18 +1134,18 @@ function App() {
                           type="monotone"
                           dataKey="pomodoros"
                           name="Pomodoros"
-                          stroke="#667eea"
+                          stroke={customColor}
                           strokeWidth={3}
-                          dot={{ fill: "#667eea", r: 5 }}
+                          dot={{ fill: customColor, r: 5 }}
                           activeDot={{ r: 8 }}
                         />
                         <Line
                           type="monotone"
                           dataKey="heures"
                           name="Heures"
-                          stroke="#43e97b"
+                          stroke={lighterColor}
                           strokeWidth={3}
-                          dot={{ fill: "#43e97b", r: 5 }}
+                          dot={{ fill: lighterColor, r: 5 }}
                           activeDot={{ r: 8 }}
                         />
                       </LineChart>
@@ -713,14 +1170,14 @@ function App() {
                           {chartData.categoryChart.map((entry, index) => (
                             <Cell
                               key={`cell-${index}`}
-                              fill={COLORS[index % COLORS.length]}
+                              fill={chartColors[index % chartColors.length]}
                             />
                           ))}
                         </Pie>
                         <Tooltip
                           contentStyle={{
                             background: "#1a1a2e",
-                            border: "1px solid #667eea",
+                            border: `1px solid ${customColor}`,
                             borderRadius: "8px",
                           }}
                         />
@@ -740,7 +1197,7 @@ function App() {
                         <Tooltip
                           contentStyle={{
                             background: "#1a1a2e",
-                            border: "1px solid #667eea",
+                            border: `1px solid ${customColor}`,
                             borderRadius: "8px",
                           }}
                         />
@@ -761,12 +1218,12 @@ function App() {
                           >
                             <stop
                               offset="5%"
-                              stopColor="#667eea"
+                              stopColor={customColor}
                               stopOpacity={0.8}
                             />
                             <stop
                               offset="95%"
-                              stopColor="#764ba2"
+                              stopColor={chartColors[3]}
                               stopOpacity={0.8}
                             />
                           </linearGradient>
@@ -789,7 +1246,7 @@ function App() {
                       <div className="category-info">
                         <span
                           className="category-color"
-                          style={{ background: COLORS[index % COLORS.length] }}
+                          style={{ background: chartColors[index % chartColors.length] }}
                         />
                         <span className="category-name">{cat.name}</span>
                       </div>

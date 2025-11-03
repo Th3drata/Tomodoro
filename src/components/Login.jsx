@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword } from '../firebase/auth'
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, signOut } from '../firebase/auth'
 
 export default function Login() {
   const [loading, setLoading] = useState(false)
@@ -23,20 +23,34 @@ export default function Login() {
       await signInWithGoogle()
     } catch (error) {
       setError('Erreur lors de la connexion. Réessayez.')
-      console.error(error)
+      
     } finally {
       setLoading(false)
     }
   }
 
 
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
   const handleEmailAuth = async (e) => {
     e.preventDefault()
-    if (!email || !password) {
-      setError('Veuillez remplir tous les champs')
+    
+    // Validation de l'email
+    if (!email || !validateEmail(email)) {
+      setError('Veuillez entrer un email valide')
       return
     }
 
+    // Validation du mot de passe
+    if (!password) {
+      setError('Veuillez entrer un mot de passe')
+      return
+    }
+
+    // Vérification confirmation mot de passe
     if (isSignUp && password !== confirmPassword) {
       setError('Les mots de passe ne correspondent pas')
       return
@@ -47,20 +61,34 @@ export default function Login() {
       setError(null)
       if (isSignUp) {
         await signUpWithEmail(email, password)
+        setSuccess('✉️ Un email de vérification a été envoyé ! Vérifiez votre boîte mail avant de vous connecter.')
+        // Revenir au mode connexion après inscription
+        setTimeout(() => {
+          setIsSignUp(false)
+          setPassword('')
+          setConfirmPassword('')
+          setSuccess(null)
+        }, 5000)
+        return
       } else {
         await signInWithEmail(email, password)
+        // La vérification de l'email sera gérée par App.jsx
       }
     } catch (error) {
       if (error.code === 'auth/email-already-in-use') {
         setError('Cet email est déjà utilisé')
-      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+      } else if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
         setError('Email ou mot de passe incorrect')
       } else if (error.code === 'auth/weak-password') {
         setError('Le mot de passe doit contenir au moins 6 caractères')
+      } else if (error.code === 'auth/too-many-requests') {
+        setError('⚠️ Trop de tentatives. Réessayez dans quelques minutes.')
+      } else if (error.code === 'auth/network-request-failed') {
+        setError('Erreur de connexion. Vérifiez votre réseau.')
       } else {
         setError('Erreur lors de la connexion')
       }
-      console.error(error)
+      
     } finally {
       setLoading(false)
     }
@@ -68,8 +96,9 @@ export default function Login() {
 
   const handleResetPassword = async (e) => {
     e.preventDefault()
-    if (!email) {
-      setError('Veuillez entrer votre email')
+    
+    if (!email || !validateEmail(email)) {
+      setError('Veuillez entrer un email valide')
       return
     }
     
@@ -84,12 +113,17 @@ export default function Login() {
         setSuccess(null)
       }, 3000)
     } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        setError('Aucun compte associé à cet email')
+      // Ne pas révéler si l'email existe ou non pour des raisons de sécurité
+      if (error.code === 'auth/too-many-requests') {
+        setError('⚠️ Trop de tentatives. Réessayez dans quelques minutes.')
       } else {
-        setError('Erreur lors de l\'envoi de l\'email')
+        setSuccess('Si cet email existe, un lien de réinitialisation a été envoyé.')
+        setTimeout(() => {
+          setShowResetPassword(false)
+          setSuccess(null)
+        }, 3000)
       }
-      console.error(error)
+      
     } finally {
       setLoading(false)
     }
@@ -123,12 +157,18 @@ export default function Login() {
           <>
             <div className="login-header">
               <div className="logo-wrapper">
-                <img 
-                  src="/tomato.png" 
-                  alt="Tomato" 
-                  className={`login-logo ${isLogoClicked ? 'clicked' : ''}`}
-                  onClick={handleLogoClick}
-                />
+                <picture>
+                  <source srcSet="/tomato.webp" type="image/webp" />
+                  <img 
+                    src="/tomato.png" 
+                    alt="Logo Tomodoro - Tomate rouge" 
+                    className={`login-logo ${isLogoClicked ? 'clicked' : ''}`}
+                    onClick={handleLogoClick}
+                    loading="eager"
+                    width="140"
+                    height="140"
+                  />
+                </picture>
                 {particles.map(particle => (
                   <div
                     key={particle.id}
@@ -141,7 +181,7 @@ export default function Login() {
                   />
                 ))}
               </div>
-              <h1>Pomodoro</h1>
+              <h1>Tomodoro</h1>
               <p>Concentrez-vous. Progressez. Réussissez.</p>
             </div>
 
@@ -183,9 +223,11 @@ export default function Login() {
                 type="email"
                 placeholder="Email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value.trim())}
                 className="input-field"
                 disabled={loading}
+                autoComplete="email"
+                spellCheck="false"
               />
               <button type="submit" className="btn-email" disabled={loading}>
                 {loading ? 'Envoi...' : 'Envoyer le lien'}
@@ -207,24 +249,29 @@ export default function Login() {
                 type="email"
                 placeholder="Email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value.trim())}
                 className="input-field"
                 disabled={loading}
+                autoComplete="email"
+                spellCheck="false"
               />
               <div className="password-input-wrapper">
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="Mot de passe (min 6 caractères)"
+                  placeholder={isSignUp ? "Mot de passe (min 6 caractères)" : "Mot de passe"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="input-field"
                   disabled={loading}
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
+                  minLength="6"
                 />
                 <button
                   type="button"
                   className="toggle-password"
                   onClick={() => setShowPassword(!showPassword)}
                   tabIndex="-1"
+                  aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                 >
                   {showPassword ? '👁️' : '👁️‍🗨️'}
                 </button>
@@ -238,12 +285,15 @@ export default function Login() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="input-field"
                     disabled={loading}
+                    autoComplete="new-password"
+                    minLength="6"
                   />
                   <button
                     type="button"
                     className="toggle-password"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     tabIndex="-1"
+                    aria-label={showConfirmPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                   >
                     {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
                   </button>
