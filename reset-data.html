@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Pomodoro Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0f0f0f;
+            color: #e0e0e0;
+        }
+        button {
+            padding: 15px 30px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+        }
+        button:hover {
+            background: #ff5252;
+        }
+        .success {
+            padding: 10px;
+            background: #51cf66;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .info {
+            padding: 10px;
+            background: #333;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗑️ Reset Pomodoro Data</h1>
+    
+    <div class="info">
+        <strong>Attention :</strong> Ceci va supprimer TOUTES tes données locales.
+        Pour Firebase, va dans la console et supprime manuellement.
+    </div>
+
+    <button onclick="resetLocalStorage()">
+        Supprimer localStorage
+    </button>
+
+    <button onclick="resetAll()">
+        Reset TOUT (localStorage + migration flag)
+    </button>
+
+    <div id="result"></div>
+
+    <script>
+        function resetLocalStorage() {
+            localStorage.removeItem('pomodoro_sessions');
+            localStorage.removeItem('pomodoro_pomodoros');
+            localStorage.removeItem('pomodoro_theme');
+            localStorage.removeItem('pomodoro_timer_settings');
+            
+            document.getElementById('result').innerHTML = 
+                '<div class="success">✅ localStorage nettoyé ! Rafraîchis l\'app.</div>';
+        }
+
+        function resetAll() {
+            // Remove all pomodoro related items
+            const keys = Object.keys(localStorage);
+            keys.forEach(key => {
+                if (key.includes('pomodoro') || key.includes('migrated')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            
+            document.getElementById('result').innerHTML = 
+                '<div class="success">✅ TOUT supprimé ! Tu peux te reconnecter et repartir de zéro.</div>';
+        }
+    </script>
+
+    <h2>📋 Instructions Firebase</h2>
+    <ol>
+        <li>Va sur <a href="https://console.firebase.google.com/project/pomodoro-bd7ba/firestore" target="_blank" style="color: #4facfe;">Firebase Console</a></li>
+        <li>Clique sur chaque collection (sessions, pomodoros, settings)</li>
+        <li>Sélectionne tous les documents et supprime-les</li>
+        <li>Ou utilise le bouton "..." et "Supprimer la collection"</li>
+    </ol>
+</body>
+</html>
