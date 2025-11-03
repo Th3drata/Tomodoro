@@ -22,7 +22,7 @@ Application de gestion du temps basée sur la technique Pomodoro, développée a
 
 1. Clonez le dépôt :
 ```bash
-git clone <url-du-repo>
+git clone https://github.com/Th3drata/Tomodoro.git
 cd Tomodoro
 ```
 
