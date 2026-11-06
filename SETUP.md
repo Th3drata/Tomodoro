@@ -1,27 +1,27 @@
-# Configuration Firebase
+# Firebase setup
 
-## Étapes de configuration
+## Setup steps
 
-1. **Créer un projet Firebase**
-   - Allez sur [console.firebase.google.com](https://console.firebase.google.com)
-   - Créez un nouveau projet
+1. **Create a Firebase project**
+   - Go to [console.firebase.google.com](https://console.firebase.google.com)
+   - Create a new project
 
-2. **Activer l'authentification**
-   - Dans la console Firebase, allez dans "Authentication"
-   - Activez le fournisseur "Google"
+2. **Enable authentication**
+   - In the Firebase console, go to "Authentication"
+   - Enable the "Google" provider
 
-3. **Créer une base de données Firestore**
-   - Allez dans "Firestore Database"
-   - Créez une base de données en mode "production"
+3. **Create a Firestore database**
+   - Go to "Firestore Database"
+   - Create a database in "production" mode
 
-4. **Configurer les variables d'environnement**
-   - Copiez `.env.example` vers `.env`
-   - Dans la console Firebase, allez dans "Project Settings" > "Your apps"
-   - Copiez les valeurs de configuration dans votre fichier `.env`
+4. **Set the environment variables**
+   - Copy `.env.example` to `.env`
+   - In the Firebase console, go to "Project Settings" > "Your apps"
+   - Copy the configuration values into your `.env` file
 
-5. **Configuration de Firestore**
+5. **Configure Firestore**
 
-Ajoutez ces règles de sécurité dans Firestore :
+Add these security rules in Firestore:
 
 ```
 rules_version = '2';
@@ -34,7 +34,7 @@ service cloud.firestore {
 }
 ```
 
-6. **Lancer l'application**
+6. **Start the app**
 ```bash
 npm run dev
 ```
